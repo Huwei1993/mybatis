@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+		<!-- namespace的命名空间，对sql进行分类化管理，理解sql隔离
+			注意：使用mapper代理开发，namespace有着特殊的重要作用
+		 -->
+		
+<mapper namespace="mapper.UserMapper"> 	
+
+
+	<!-- 定义sql片段 
+		经验：是基于单表来定义sql片段，这样的话sql片段的可重用性比较高
+			在sql片段中不要包括where
+	-->
+	<sql id="query_user_where">
+	<!-- 	<where> -->
+		<if test="userCusTom!=null">
+			<if test="userCusTom.sex!=null and userCusTom.sex!=''">
+		 	and user_.sex=#{userCusTom.sex}
+			</if>
+			<if test="userCusTom.username!=null and userCusTom.username!=''">
+		 	and	user_.username like '%${userCusTom.username}%'
+			</if>
+			<if test="ids!=null">
+			<!-- 使用foreach遍历传入ids
+				collection： 指定输入对象中集合的属性
+				item:每次遍历生成的对象名 这里生成的，随意写
+				open:开始遍历拼接串
+				close:结束遍历是所需要拼接的串
+				separator： 遍历中间所需要拼接的sql串
+			 -->
+			<!--  使用实现下面的sql拼接：
+			 select * from student_info where  and (nid =1 or nid =2  or nid =3)
+			 -->
+				<foreach collection="ids"  item="user_id"  open="and (" close=")" separator="or">
+				<!-- 每次遍历所需要拼接的串 -->
+				id=#{User_id}
+				</foreach>
+				
+				
+				<!-- 另一种方法：sql：语句  select * from student_info where and nid in(1,2,3); -->
+				
+				
+				<foreach collection="ids"  item="User_id"  open="and id in(" close=")" separator=",">
+				<!-- 每次遍历所需要拼接的串 -->
+				#{user_id}
+				</foreach>
+				
+			</if>
+		</if>
+		
+		<!-- </where> -->
+		
+	</sql>
+
+
+	<!-- 定义resultMap	
+		将select nid _id, name _name from student_info stu where  nid = #{value}和User类中的属性做一次映射关系
+	 	type : 最终所映射的java对象，可以使用别名
+	 -->
+	 <resultMap type="user" id="userResultMap">
+	 	<!-- id表示查询结果中集中唯一标识
+	 		column: 查询出的列名
+	 		property：type指定jopo类型中的属性名
+	 		最终resultMap对column和property做一个映射关系
+	 	 -->
+	 	<id column="_id" property="id"/>
+	 	<result column="name_" property="name"/>
+	 	  
+	 </resultMap>
+	
+
+
+
+	<!-- 用户信息综合查询 -->
+	<!-- 
+		userCusTom.sex 取出pojo包中对象的写别   userCusTom.name 名称
+		动态sql语句拼接
+	-->
+	<select id="findUserList"  parameterType="com.itcast.po.UserQueryVo" resultType="com.itcast.po.UserCusTom">
+		select * from user user_
+		<!-- where 可以自动的去掉条件中的第一个and -->
+		<where>
+			<include refid="query_user_where"></include>    <!-- 在上方定义的sql片段 id ，如果id不在本文件中，则需要加上另一个文件的namespace-->
+			<!-- 还要引用其他的sql片段 -->
+			
+		</where>
+		
+	</select>
+	
+	<!-- 使用resultMap返回类型 -->
+	<!-- resultMap: 是在上方定义的resultMap 的id，如果这个resultMap在其他mapper.xml文件中，则前面加上namespace -->
+	<select id="findUserByIdResultMap"  parameterType="com.itcast.po.UserQueryVo" resultMap="userResultMap"> 
+		select id _id, username _name from user user_  where  id = #{value}
+	</select>
+	
+	
+			<!-- 用户信息的综合查询总数 
+				resultType: int 简单类型的条件：输出的结果集只有一个数据，一行一列的交集
+			-->
+	<select id="findUserCount"  parameterType="com.itcast.po.UserQueryVo" resultType="int">
+		select count(*) from user user_ where  user_.sex= #{userCusTom.sex} and user_.username like '%${userCusTom.username}%'
+	</select>
+	<!-- 在映射文件中配置上sql语句 -->
+	<!-- 需求：通过id查询信息 -->
+	<!-- 通过select执行数据库来查询 
+		id： 标志映射文件中的sql，称为statement的id，
+		将sql语句封装到mappedStatement对象中 ，所以将id称为statement的id
+		parameterType: 指定输入参数的类型，这里的int型是数据库当中的nid的类型
+		{id} ：id表示输入法 参数，参数名称就是id，如果输入的参数是简单类型，则这里#{}中的参数可以任意，可以是value或者其他的名称
+		resultType: 指定sql输出结果的所映射的java对象 类型，select指定resultType表示将单条记录映射成的java对象
+		
+	-->
+	
+
+	
+	<select id="findUserById" parameterType="int" resultType="user">
+		SELECT * FROM use WHERE id = #{nid}
+	</select>
+	
+	
+	<!-- 根据用户名称模糊查询用户信息
+		${}: 表示拼接sql串，将接收到的参数内容不加任何修饰的拼接在sql串中
+		使用${}拼接sql语句，可能引起sql注入
+		${value}:接收输入参数的内容，如果输入参数是简单类型，${}中只能使用value
+	 -->
+	<select id = "findUserByName"  parameterType="String" resultType="user">
+		SELECT * FROM user WHERE username LIKE '%${value}%'
+	</select>
+	<!-- 配置添加用户 -->
+	<insert id = "insertUser"   parameterType="com.itcast.po.User">
+		<!--
+		将插入数据的主键返回，返回到user对象当中
+		SELCET LAST_INSERT_ID()  ： 得到刚insert进去的主键值，只适用于自增主键 
+		keyProperty ：将查询到的主键值设置到parameterType指定的哪个属性
+		order:SELCET LAST_INSERT_ID()执行顺序，相对于insert语句来说它的执行顺序
+		resultType : 指定返回的结果类型
+		-->			
+		<selectKey  keyProperty="nid" order="AFTER"  resultType="java.lang.Integer">
+			SELECT LAST_INSERT_ID()   <!-- 自增主键查询 -->
+		</selectKey>
+		insert into user(username,sex,address) value(#{username},#{sex},#{address})
+		
+		<!-- 非自增主键查询 -->
+		<!-- <selectKey  keyProperty="nid" order="BEFORE"  resultType="java.lang.String">
+			SELECT UUID()   非自增主键查询
+		</selectKey> -->
+		<!-- 自增状况下可以省略nid，非自增是必须写上去 
+		insert into student_info(nid,name,className,major) value(#{nid},#{name},#{className},#{major}) -->
+	</insert>
+	
+						<!-- 删除用户 -->
+	<delete id="deleteUser" parameterType="java.lang.Integer">
+		delete from uer where id =#{id}
+	</delete>
+				<!-- 更新用户 -->
+	<update id="updataUser" parameterType = "com.itcast.po.User">
+		update user set username=#{username},sex=#{sex},address=#{address} where id =#{id}
+		
+	</update>
+	
+	
+	
+	
+</mapper>
